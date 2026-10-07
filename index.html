@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Potaya Smaç — Basketbol Oyunu</title>
+<style>
+  :root{
+    --sky-top:#8ecbff;
+    --sky-bot:#eaf6ff;
+    --ink:#1b2430;
+  }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{
+    margin:0; padding:0; height:100%; overflow:hidden;
+    background:#0c1b2e;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+    color:var(--ink);
+    display:flex; align-items:center; justify-content:center;
+  }
+  #wrap{
+    position:relative;
+    width:100vw; height:100vh;
+    max-width:480px; max-height:800px;
+    aspect-ratio:480/800;
+    margin:auto;
+    box-shadow:0 0 60px rgba(0,0,0,0.5);
+  }
+  canvas{
+    display:block;
+    width:100%; height:100%;
+    touch-action:none;
+    cursor:pointer;
+  }
+  #hud{
+    position:absolute; top:16px; left:0; right:0;
+    text-align:center; pointer-events:none;
+  }
+  #hud .score{
+    font-weight:800; font-size:42px;
+    color:#fff;
+    text-shadow:0 2px 0 rgba(0,0,0,0.25), 0 0 16px rgba(0,0,0,0.15);
+    letter-spacing:1px;
+    line-height:1.05;
+  }
+  #hud .mult{
+    display:inline-block;
+    margin-top:2px;
+    font-weight:800; font-size:16px;
+    color:#ffce54;
+    text-shadow:0 2px 0 rgba(0,0,0,0.3);
+    letter-spacing:0.5px;
+    transition:transform 0.15s ease;
+  }
+  #hud .mult.bump{
+    transform:scale(1.35);
+  }
+  #overlay{
+    position:absolute; inset:0;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center;
+    background:rgba(8,16,28,0.55);
+    backdrop-filter:blur(2px);
+    color:#fff;
+    padding:24px;
+  }
+  #overlay.hidden{ display:none; }
+  #overlay h1{
+    font-size:1.9rem; margin:0 0 6px;
+  }
+  #overlay p{
+    margin:4px 0 18px;
+    opacity:0.85;
+    font-size:0.95rem;
+    max-width:300px;
+    line-height:1.5;
+  }
+  #overlay .score-row{
+    display:flex; gap:28px; margin-bottom:22px;
+  }
+  #overlay .score-box{
+    background:rgba(255,255,255,0.1);
+    border:1px solid rgba(255,255,255,0.18);
+    border-radius:14px;
+    padding:10px 20px;
+  }
+  #overlay .score-box .label{
+    font-size:0.7rem; text-transform:uppercase; letter-spacing:1px; opacity:0.7;
+  }
+  #overlay .score-box .val{
+    font-size:1.6rem; font-weight:800;
+  }
+  #startBtn{
+    background:linear-gradient(160deg,#ff8a3d,#e0581f);
+    border:none; color:#fff; font-weight:800; font-size:1.05rem;
+    padding:14px 34px; border-radius:999px;
+    box-shadow:0 8px 20px rgba(224,88,31,0.45);
+    cursor:pointer;
+  }
+  #startBtn:active{ transform:scale(0.97); }
+  #footer-hint{
+    position:absolute; bottom:10px; left:0; right:0;
+    text-align:center; font-size:0.72rem; color:rgba(255,255,255,0.55);
+  }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="game"></canvas>
+  <div id="hud">
+    <div class="score" id="scoreEl">0</div>
+    <div class="mult" id="multEl">x1</div>
+  </div>
+  <div id="overlay">
+    <h1>🏀 Potaya Smaç</h1>
+    <p>Topa zıplatmak için tıkla / dokun / boşluk tuşuna bas. Havada asılı
+    çemberlerin içinden geçmeye çalış! Çembere değmeden geçersen çarpanın
+    artar ve daha çok puan kazanırsın. Bir çemberden geçemezsen oyun biter.</p>
+    <div class="score-row">
+      <div class="score-box">
+        <div class="label">Skor</div>
+        <div class="val" id="lastScore">0</div>
+      </div>
+      <div class="score-box">
+        <div class="label">Rekor</div>
+        <div class="val" id="bestScore">0</div>
+      </div>
+    </div>
+    <button id="startBtn">Başla</button>
+  </div>
+  <div id="footer-hint">Yıldırım • Potaya Smaç</div>
+</div>
+
+<script>
+(function(){
+  var canvas = document.getElementById('game');
+  var ctx = canvas.getContext('2d');
+  var overlay = document.getElementById('overlay');
+  var scoreEl = document.getElementById('scoreEl');
+  var multEl = document.getElementById('multEl');
+  var startBtn = document.getElementById('startBtn');
+  var lastScoreEl = document.getElementById('lastScore');
+  var bestScoreEl = document.getElementById('bestScore');
+
+  var W = 480, H = 800; // internal resolution, scaled by CSS
+  canvas.width = W;
+  canvas.height = H;
+
+  var BEST_KEY = 'potayasmac_best';
+  var best = 0;
+  try { best = parseInt(localStorage.getItem(BEST_KEY) || '0', 10) || 0; } catch(e){ best = 0; }
+  bestScoreEl.textContent = best;
+
+  var state = 'ready'; // ready | playing | over
+  var score = 0;
+  var multiplier = 1;
+
+  var ball = {
+    x: W * 0.28,
+    y: H * 0.45,
+    r: 20,
+    vy: 0,
+    rot: 0
+  };
+
+  var GRAVITY = 1500;      // px/s^2
+  var JUMP_V = -480;       // px/s
+  var MAX_FALL = 900;
+
+  var rings = [];
+  var RING_R = 58;         // hole radius (the gap you fly through)
+  var RIM_THICK = 14;      // visual + collision thickness of the ring itself
+  var RING_OUTER = RING_R + RIM_THICK;
+  var RING_SPACING = 300;
+  var RING_SPEED = 170;    // px/s
+  var BOB_AMP = 10;        // gentle floating sway
+  var BOB_FREQ = 1.6;
+
+  var groundH = 70;
+
+  var lastTime = null;
+
+  function resetGame(){
+    score = 0;
+    multiplier = 1;
+    ball.y = H * 0.45;
+    ball.vy = 0;
+    ball.rot = 0;
+    rings = [];
+    scoreEl.textContent = '0';
+    multEl.textContent = 'x1';
+    spawnRing(W + 150);
+    spawnRing(W + 150 + RING_SPACING);
+    spawnRing(W + 150 + RING_SPACING * 2);
+  }
+
+  function spawnRing(x){
+    var margin = 50;
+    var minY = margin + RING_OUTER;
+    var maxY = H - groundH - margin - RING_OUTER;
+    var y = minY + Math.random() * (maxY - minY);
+    rings.push({ x: x, y: y, baseY: y, phase: Math.random() * Math.PI * 2, resolved: false });
+  }
+
+  function jump(){
+    if(state === 'ready'){
+      startGame();
+      return;
+    }
+    if(state === 'over'){
+      return;
+    }
+    ball.vy = JUMP_V;
+  }
+
+  function startGame(){
+    resetGame();
+    state = 'playing';
+    overlay.classList.add('hidden');
+    lastTime = null;
+    requestAnimationFrame(loop);
+  }
+
+  function endGame(){
+    state = 'over';
+    lastScoreEl.textContent = score;
+    if(score > best){
+      best = score;
+      bestScoreEl.textContent = best;
+      try { localStorage.setItem(BEST_KEY, String(best)); } catch(e){}
+    }
+    document.querySelector('#overlay h1').textContent = '🏀 Oyun Bitti';
+    document.querySelector('#overlay p').textContent = 'Çemberden geçemedin! Tekrar dene ve çarpanını büyüt.';
+    startBtn.textContent = 'Tekrar Oyna';
+    overlay.classList.remove('hidden');
+  }
+
+  function bumpMultiplier(){
+    multEl.classList.remove('bump');
+    void multEl.offsetWidth; // restart CSS animation
+    multEl.classList.add('bump');
+  }
+
+  function update(dt){
+    ball.vy += GRAVITY * dt;
+    if(ball.vy > MAX_FALL) ball.vy = MAX_FALL;
+    ball.y += ball.vy * dt;
+    ball.rot += dt * 6;
+
+    if(ball.y - ball.r < 0){
+      ball.y = ball.r;
+      ball.vy = 0;
+    }
+    if(ball.y + ball.r > H - groundH){
+      ball.y = H - groundH - ball.r;
+      endGame();
+      return;
+    }
+
+    for(var i = 0; i < rings.length; i++){
+      var ring = rings[i];
+      ring.x -= RING_SPEED * dt;
+      ring.y = ring.baseY + Math.sin(ring.phase + ring.x * 0.012 * BOB_FREQ) * BOB_AMP;
+
+      if(!ring.resolved && ring.x <= ball.x){
+        ring.resolved = true;
+        var dx = ring.x - ball.x;
+        var dy = ring.y - ball.y;
+        var dist = Math.sqrt(dx*dx + dy*dy);
+
+        if(dist <= RING_R - ball.r){
+          // Clean pass — never touched the rim
+          score += multiplier;
+          multiplier += 1;
+          scoreEl.textContent = score;
+          multEl.textContent = 'x' + multiplier;
+          bumpMultiplier();
+        } else if(dist < RING_OUTER + ball.r){
+          // Grazed the rim, but still made it through
+          score += 1;
+          multiplier = 1;
+          scoreEl.textContent = score;
+          multEl.textContent = 'x1';
+        } else {
+          // Missed the ring entirely
+          endGame();
+          return;
+        }
+      }
+    }
+
+    while(rings.length && rings[0].x < -RING_OUTER - 20){
+      rings.shift();
+    }
+    var lastX = rings.length ? rings[rings.length-1].x : W;
+    if(W - lastX >= RING_SPACING){
+      spawnRing(lastX + RING_SPACING);
+    }
+  }
+
+  function drawBackground(){
+    var g = ctx.createLinearGradient(0,0,0,H);
+    g.addColorStop(0, '#8ecbff');
+    g.addColorStop(1, '#e9f6ff');
+    ctx.fillStyle = g;
+    ctx.fillRect(0,0,W,H);
+
+    ctx.fillStyle = 'rgba(255,255,255,0.75)';
+    drawCloud(90, 130, 1);
+    drawCloud(330, 90, 0.8);
+    drawCloud(230, 210, 0.6);
+  }
+
+  function drawCloud(cx, cy, scale){
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(scale, scale);
+    ctx.beginPath();
+    ctx.arc(0,0,26,0,Math.PI*2);
+    ctx.arc(26,8,20,0,Math.PI*2);
+    ctx.arc(-26,8,20,0,Math.PI*2);
+    ctx.arc(0,16,24,0,Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawGround(){
+    ctx.fillStyle = '#c98a4b';
+    ctx.fillRect(0, H - groundH, W, groundH);
+    ctx.fillStyle = '#b5753a';
+    for(var x = -((Date.now()/8) % 40); x < W; x += 40){
+      ctx.fillRect(x, H - groundH, 20, 10);
+    }
+    ctx.fillStyle = '#8a5a2b';
+    ctx.fillRect(0, H - groundH, W, 6);
+  }
+
+  function drawRing(ring){
+    var x = ring.x, y = ring.y;
+
+    // soft shadow glow behind the ring
+    ctx.save();
+    ctx.globalAlpha = 0.18;
+    ctx.fillStyle = '#000';
+    ctx.beginPath();
+    ctx.ellipse(x, y + RING_OUTER + 6, RING_R * 0.7, 8, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+
+    // hanging net beneath the hole
+    ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+    ctx.lineWidth = 1.4;
+    var netLen = 30;
+    for(var i = -3; i <= 3; i++){
+      ctx.beginPath();
+      ctx.moveTo(x + i * (RING_R/3.4), y + RING_R*0.55);
+      ctx.lineTo(x + i * (RING_R/5), y + RING_R*0.55 + netLen);
+      ctx.stroke();
+    }
+    ctx.beginPath();
+    ctx.moveTo(x - RING_R*0.7, y + RING_R*0.55 + netLen*0.55);
+    ctx.lineTo(x + RING_R*0.7, y + RING_R*0.55 + netLen*0.55);
+    ctx.stroke();
+
+    // outer rim ring (torus) — this is the solid part you must avoid
+    ctx.strokeStyle = '#e0581f';
+    ctx.lineWidth = RIM_THICK;
+    ctx.beginPath();
+    ctx.arc(x, y, RING_R + RIM_THICK/2, 0, Math.PI*2);
+    ctx.stroke();
+
+    // inner highlight line for a glossy hoop look
+    ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(x, y, RING_R + 2, -Math.PI*0.85, -Math.PI*0.15);
+    ctx.stroke();
+
+    // dark inner edge for depth
+    ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(x, y, RING_R, 0, Math.PI*2);
+    ctx.stroke();
+  }
+
+  function drawBall(){
+    ctx.save();
+    ctx.translate(ball.x, ball.y);
+    ctx.rotate(ball.rot);
+    var r = ball.r;
+
+    var g = ctx.createRadialGradient(-r*0.35, -r*0.35, r*0.2, 0, 0, r);
+    g.addColorStop(0, '#ffb066');
+    g.addColorStop(1, '#e0581f');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(0,0,r,0,Math.PI*2);
+    ctx.fill();
+
+    ctx.strokeStyle = '#2a1608';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-r, 0); ctx.lineTo(r, 0);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, -r); ctx.lineTo(0, r);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, 0, r, -Math.PI*0.75, -Math.PI*0.25);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, 0, r, Math.PI*0.25, Math.PI*0.75);
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  function render(){
+    drawBackground();
+    for(var i=0;i<rings.length;i++) drawRing(rings[i]);
+    drawGround();
+    drawBall();
+  }
+
+  function loop(ts){
+    if(state !== 'playing'){ render(); return; }
+    if(lastTime == null) lastTime = ts;
+    var dt = Math.min((ts - lastTime) / 1000, 1/30);
+    lastTime = ts;
+    update(dt);
+    if(state === 'playing'){
+      render();
+      requestAnimationFrame(loop);
+    } else {
+      render();
+    }
+  }
+
+  // input
+  function onPress(e){
+    if(e) e.preventDefault();
+    jump();
+  }
+  canvas.addEventListener('pointerdown', onPress);
+  startBtn.addEventListener('pointerdown', function(e){
+    e.stopPropagation();
+    e.preventDefault();
+    startGame();
+  });
+  window.addEventListener('keydown', function(e){
+    if(e.code === 'Space' || e.code === 'ArrowUp'){
+      e.preventDefault();
+      jump();
+    }
+  });
+
+  // initial draw
+  resetGame();
+  render();
+})();
+</script>
+</body>
+</html>

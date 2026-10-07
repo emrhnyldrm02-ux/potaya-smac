@@ -6,14 +6,12 @@
 <title>Potaya Smaç — Basketbol Oyunu</title>
 <style>
   :root{
-    --sky-top:#8ecbff;
-    --sky-bot:#eaf6ff;
-    --ink:#1b2430;
+    --ink:#3a2415;
   }
   *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   html,body{
     margin:0; padding:0; height:100%; overflow:hidden;
-    background:#0c1b2e;
+    background:#2b1a10;
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
     color:var(--ink);
     display:flex; align-items:center; justify-content:center;
@@ -33,35 +31,45 @@
     cursor:pointer;
   }
   #hud{
-    position:absolute; top:16px; left:0; right:0;
-    text-align:center; pointer-events:none;
+    position:absolute; top:14px; left:14px; right:14px;
+    display:flex; align-items:center; justify-content:space-between;
+    pointer-events:none;
   }
-  #hud .score{
-    font-weight:800; font-size:42px;
-    color:#fff;
-    text-shadow:0 2px 0 rgba(0,0,0,0.25), 0 0 16px rgba(0,0,0,0.15);
-    letter-spacing:1px;
-    line-height:1.05;
+  .badge{
+    background:rgba(90,52,32,0.92);
+    border:2px solid rgba(255,255,255,0.12);
+    border-radius:14px;
+    padding:6px 16px;
+    text-align:center;
+    color:#f6e8ce;
+    box-shadow:0 4px 10px rgba(0,0,0,0.25);
   }
-  #hud .mult{
-    display:inline-block;
-    margin-top:2px;
-    font-weight:800; font-size:16px;
-    color:#ffce54;
-    text-shadow:0 2px 0 rgba(0,0,0,0.3);
-    letter-spacing:0.5px;
+  .badge .label{
+    font-size:0.6rem; text-transform:uppercase; letter-spacing:1px; opacity:0.75;
+    font-weight:700;
+  }
+  .badge .val{
+    font-size:1.3rem; font-weight:800; line-height:1.1;
+  }
+  #multBadge{
+    position:absolute; top:60px; left:50%; transform:translateX(-50%);
+    background:linear-gradient(160deg,#ffcf5c,#ff8a1f);
+    color:#5a2e00;
+    font-weight:800; font-size:1rem;
+    padding:4px 14px; border-radius:999px;
+    box-shadow:0 4px 10px rgba(0,0,0,0.3);
     transition:transform 0.15s ease;
+    opacity:0;
   }
-  #hud .mult.bump{
-    transform:scale(1.35);
-  }
+  #multBadge.show{ opacity:1; }
+  #multBadge.bump{ transform:translateX(-50%) scale(1.3); }
   #overlay{
     position:absolute; inset:0;
     display:flex; flex-direction:column; align-items:center; justify-content:center;
     text-align:center;
-    background:rgba(8,16,28,0.55);
+    background:rgba(40,22,12,0.68);
     backdrop-filter:blur(2px);
-    color:#fff;
+    color:#fbeedb;
     padding:24px;
   }
   #overlay.hidden{ display:none; }
@@ -70,10 +78,10 @@
   }
   #overlay p{
     margin:4px 0 18px;
-    opacity:0.85;
+    opacity:0.9;
     font-size:0.95rem;
     max-width:300px;
-    line-height:1.5;
+    line-height:1.55;
   }
   #overlay .score-row{
     display:flex; gap:28px; margin-bottom:22px;
@@ -85,22 +93,22 @@
     padding:10px 20px;
   }
   #overlay .score-box .label{
-    font-size:0.7rem; text-transform:uppercase; letter-spacing:1px; opacity:0.7;
+    font-size:0.7rem; text-transform:uppercase; letter-spacing:1px; opacity:0.75;
   }
   #overlay .score-box .val{
     font-size:1.6rem; font-weight:800;
   }
   #startBtn{
-    background:linear-gradient(160deg,#ff8a3d,#e0581f);
+    background:linear-gradient(160deg,#ff5f96,#d81159);
     border:none; color:#fff; font-weight:800; font-size:1.05rem;
     padding:14px 34px; border-radius:999px;
-    box-shadow:0 8px 20px rgba(224,88,31,0.45);
+    box-shadow:0 8px 20px rgba(216,17,89,0.45);
     cursor:pointer;
   }
   #startBtn:active{ transform:scale(0.97); }
   #footer-hint{
     position:absolute; bottom:10px; left:0; right:0;
-    text-align:center; font-size:0.72rem; color:rgba(255,255,255,0.55);
+    text-align:center; font-size:0.72rem; color:rgba(251,238,219,0.55);
   }
 </style>
 </head>
@@ -108,14 +116,21 @@
 <div id="wrap">
   <canvas id="game"></canvas>
   <div id="hud">
-    <div class="score" id="scoreEl">0</div>
-    <div class="mult" id="multEl">x1</div>
+    <div class="badge">
+      <div class="label">Skor</div>
+      <div class="val" id="scoreEl">0</div>
+    </div>
+    <div class="badge">
+      <div class="label">Rekor</div>
+      <div class="val" id="bestEl">0</div>
+    </div>
   </div>
+  <div id="multBadge">x1</div>
   <div id="overlay">
     <h1>🏀 Potaya Smaç</h1>
-    <p>Topa zıplatmak için tıkla / dokun / boşluk tuşuna bas. Havada asılı
-    çemberlerin içinden geçmeye çalış! Çembere değmeden geçersen çarpanın
-    artar ve daha çok puan kazanırsın. Bir çemberden geçemezsen oyun biter.</p>
+    <p>Topu geri çekip bırak: tuttuğun yönün tersine fırlar ve bir yay çizerek
+    bir sonraki çembere uçar. Çembere değmeden tam ortadan geçersen çarpanın
+    artar. Bir çemberi kaçırırsan oyun biter.</p>
     <div class="score-row">
       <div class="score-box">
         <div class="label">Skor</div>
@@ -137,184 +152,235 @@
   var ctx = canvas.getContext('2d');
   var overlay = document.getElementById('overlay');
   var scoreEl = document.getElementById('scoreEl');
-  var multEl = document.getElementById('multEl');
+  var bestEl = document.getElementById('bestEl');
+  var multBadge = document.getElementById('multBadge');
   var startBtn = document.getElementById('startBtn');
   var lastScoreEl = document.getElementById('lastScore');
   var bestScoreEl = document.getElementById('bestScore');
 
-  var W = 480, H = 800; // internal resolution, scaled by CSS
+  var W = 480, H = 800;
   canvas.width = W;
   canvas.height = H;
 
   var BEST_KEY = 'potayasmac_best';
   var best = 0;
   try { best = parseInt(localStorage.getItem(BEST_KEY) || '0', 10) || 0; } catch(e){ best = 0; }
+  bestEl.textContent = best;
   bestScoreEl.textContent = best;
 
-  var state = 'ready'; // ready | playing | over
+  var gameState = 'start'; // start | playing | over
+  var ballState = 'ready'; // ready | aiming | flying | falling
   var score = 0;
   var multiplier = 1;
 
-  var ball = {
-    x: W * 0.28,
-    y: H * 0.45,
-    r: 20,
-    vy: 0,
-    rot: 0
-  };
+  var GRAVITY = 1700;
+  var MAX_DRAG = 150;
+  var POWER_SCALE = 6.5;
+  var MIN_DRAG = 14;
 
-  var GRAVITY = 1500;      // px/s^2
-  var JUMP_V = -480;       // px/s
-  var MAX_FALL = 900;
+  var ball = { x: 0, y: 0, vx: 0, vy: 0, r: 18, rot: 0 };
+  var camera = { y: 0 };
 
-  var rings = [];
-  var RING_R = 58;         // hole radius (the gap you fly through)
-  var RIM_THICK = 14;      // visual + collision thickness of the ring itself
+  var RING_R = 52;
+  var RIM_THICK = 13;
   var RING_OUTER = RING_R + RIM_THICK;
-  var RING_SPACING = 300;
-  var RING_SPEED = 170;    // px/s
-  var BOB_AMP = 10;        // gentle floating sway
-  var BOB_FREQ = 1.6;
+  var ring = { x: 0, y: 0, resolved: false };
+  var prevRingGhost = null; // for brief fade-out visual
 
-  var groundH = 70;
+  var clouds = [];
+  var highestSpawnY = 0; // most negative world y reached by spawned decor
 
-  var lastTime = null;
+  var drag = { active:false, sx:0, sy:0, cx:0, cy:0, vx:0, vy:0 };
+  var fallTimer = 0;
 
-  function resetGame(){
+  function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+
+  function resetWorld(){
     score = 0;
     multiplier = 1;
-    ball.y = H * 0.45;
-    ball.vy = 0;
-    ball.rot = 0;
-    rings = [];
     scoreEl.textContent = '0';
-    multEl.textContent = 'x1';
-    spawnRing(W + 150);
-    spawnRing(W + 150 + RING_SPACING);
-    spawnRing(W + 150 + RING_SPACING * 2);
+    multBadge.textContent = 'x1';
+    multBadge.classList.remove('show','bump');
+
+    ball.x = W * 0.5;
+    ball.y = 0;
+    ball.vx = 0; ball.vy = 0; ball.rot = 0;
+    camera.y = ball.y - H * 0.72;
+    ballState = 'ready';
+
+    ring.x = W * 0.5 + (Math.random()*160-80);
+    ring.x = clamp(ring.x, 70, W-70);
+    ring.y = ball.y - (220 + Math.random()*70);
+    ring.resolved = false;
+    prevRingGhost = null;
+
+    clouds = [];
+    highestSpawnY = ball.y + 40;
+    for(var i=0;i<5;i++) spawnCloud();
   }
 
-  function spawnRing(x){
-    var margin = 50;
-    var minY = margin + RING_OUTER;
-    var maxY = H - groundH - margin - RING_OUTER;
-    var y = minY + Math.random() * (maxY - minY);
-    rings.push({ x: x, y: y, baseY: y, phase: Math.random() * Math.PI * 2, resolved: false });
+  function spawnCloud(){
+    highestSpawnY -= (120 + Math.random()*90);
+    clouds.push({
+      x: 40 + Math.random()*(W-80),
+      y: highestSpawnY,
+      scale: 0.6 + Math.random()*0.8,
+      speed: 0.35 + Math.random()*0.25
+    });
   }
 
-  function jump(){
-    if(state === 'ready'){
-      startGame();
-      return;
-    }
-    if(state === 'over'){
-      return;
-    }
-    ball.vy = JUMP_V;
+  function spawnNextRing(){
+    prevRingGhost = { x: ring.x, y: ring.y, alpha: 1 };
+    var dx = (Math.random()*230 - 115);
+    var nx = clamp(ring.x + dx, 70, W-70);
+    var ny = ring.y - (190 + Math.random()*90);
+    ring.x = nx; ring.y = ny; ring.resolved = false;
+    while(highestSpawnY > ny - 300){ spawnCloud(); }
   }
 
   function startGame(){
-    resetGame();
-    state = 'playing';
+    resetWorld();
+    gameState = 'playing';
     overlay.classList.add('hidden');
     lastTime = null;
     requestAnimationFrame(loop);
   }
 
+  function bumpMultiplier(){
+    multBadge.classList.add('show');
+    multBadge.classList.remove('bump');
+    void multBadge.offsetWidth;
+    multBadge.classList.add('bump');
+  }
+
   function endGame(){
-    state = 'over';
+    gameState = 'over';
     lastScoreEl.textContent = score;
     if(score > best){
       best = score;
+      bestEl.textContent = best;
       bestScoreEl.textContent = best;
       try { localStorage.setItem(BEST_KEY, String(best)); } catch(e){}
     }
     document.querySelector('#overlay h1').textContent = '🏀 Oyun Bitti';
-    document.querySelector('#overlay p').textContent = 'Çemberden geçemedin! Tekrar dene ve çarpanını büyüt.';
+    document.querySelector('#overlay p').textContent = 'Çemberi kaçırdın! Tekrar dene ve çarpanını büyüt.';
     startBtn.textContent = 'Tekrar Oyna';
     overlay.classList.remove('hidden');
   }
 
-  function bumpMultiplier(){
-    multEl.classList.remove('bump');
-    void multEl.offsetWidth; // restart CSS animation
-    multEl.classList.add('bump');
+  function screenPos(worldX, worldY){
+    return { x: worldX, y: worldY - camera.y };
+  }
+
+  function shoot(vx, vy){
+    ball.vx = vx; ball.vy = vy;
+    ballState = 'flying';
+  }
+
+  function resolveRing(dist){
+    if(dist <= RING_R - ball.r){
+      score += multiplier;
+      multiplier += 1;
+      scoreEl.textContent = score;
+      multBadge.textContent = 'x' + multiplier;
+      bumpMultiplier();
+    } else {
+      score += 1;
+      multiplier = 1;
+      scoreEl.textContent = score;
+      multBadge.textContent = 'x1';
+      multBadge.classList.remove('show');
+    }
+    ball.x = ring.x; ball.y = ring.y;
+    ball.vx = 0; ball.vy = 0; ball.rot = 0;
+    ballState = 'ready';
+    spawnNextRing();
   }
 
   function update(dt){
-    ball.vy += GRAVITY * dt;
-    if(ball.vy > MAX_FALL) ball.vy = MAX_FALL;
-    ball.y += ball.vy * dt;
-    ball.rot += dt * 6;
+    for(var i=0;i<clouds.length;i++) clouds[i].x += clouds[i].speed * dt * 6;
+    while(clouds.length && clouds[0].y > ball.y + H*1.3){ clouds.shift(); }
 
-    if(ball.y - ball.r < 0){
-      ball.y = ball.r;
-      ball.vy = 0;
-    }
-    if(ball.y + ball.r > H - groundH){
-      ball.y = H - groundH - ball.r;
-      endGame();
-      return;
-    }
+    var targetCamY = ball.y - H * 0.72;
+    camera.y += (targetCamY - camera.y) * Math.min(1, dt*4.2);
 
-    for(var i = 0; i < rings.length; i++){
-      var ring = rings[i];
-      ring.x -= RING_SPEED * dt;
-      ring.y = ring.baseY + Math.sin(ring.phase + ring.x * 0.012 * BOB_FREQ) * BOB_AMP;
+    if(ballState === 'flying'){
+      ball.vy += GRAVITY * dt;
+      ball.x += ball.vx * dt;
+      ball.y += ball.vy * dt;
+      ball.rot += ball.vx * dt * 0.01;
 
-      if(!ring.resolved && ring.x <= ball.x){
+      if(ball.x - ball.r < 10){ ball.x = ball.r + 10; ball.vx *= -0.55; }
+      if(ball.x + ball.r > W-10){ ball.x = W-10-ball.r; ball.vx *= -0.55; }
+
+      if(!ring.resolved && ball.y <= ring.y){
         ring.resolved = true;
         var dx = ring.x - ball.x;
         var dy = ring.y - ball.y;
-        var dist = Math.sqrt(dx*dx + dy*dy);
-
-        if(dist <= RING_R - ball.r){
-          // Clean pass — never touched the rim
-          score += multiplier;
-          multiplier += 1;
-          scoreEl.textContent = score;
-          multEl.textContent = 'x' + multiplier;
-          bumpMultiplier();
-        } else if(dist < RING_OUTER + ball.r){
-          // Grazed the rim, but still made it through
-          score += 1;
-          multiplier = 1;
-          scoreEl.textContent = score;
-          multEl.textContent = 'x1';
+        var dist = Math.sqrt(dx*dx+dy*dy);
+        if(dist < RING_OUTER + ball.r){
+          resolveRing(dist);
         } else {
-          // Missed the ring entirely
-          endGame();
-          return;
+          ballState = 'falling';
+          fallTimer = 0;
         }
       }
     }
 
-    while(rings.length && rings[0].x < -RING_OUTER - 20){
-      rings.shift();
+    if(ballState === 'falling'){
+      ball.vy += GRAVITY * dt;
+      ball.x += ball.vx * dt;
+      ball.y += ball.vy * dt;
+      ball.rot += ball.vx * dt * 0.01;
+      fallTimer += dt;
+      if(fallTimer > 1.1 || ball.y - camera.y > H + 140){
+        endGame();
+      }
     }
-    var lastX = rings.length ? rings[rings.length-1].x : W;
-    if(W - lastX >= RING_SPACING){
-      spawnRing(lastX + RING_SPACING);
+  }
+
+  // Track apex-missed condition separately (cleaner than inline above)
+  var launchY = 0;
+  var pastApex = false;
+  var origShoot = shoot;
+  shoot = function(vx, vy){
+    origShoot(vx, vy);
+    launchY = ball.y;
+    pastApex = false;
+  };
+
+  function checkApexMiss(){
+    if(ballState !== 'flying' || ring.resolved) return;
+    if(ball.vy >= 0){
+      if(!pastApex) pastApex = true;
+      if(ball.y >= launchY){
+        ring.resolved = true;
+        ballState = 'falling';
+        fallTimer = 0;
+      }
     }
   }
 
   function drawBackground(){
     var g = ctx.createLinearGradient(0,0,0,H);
-    g.addColorStop(0, '#8ecbff');
-    g.addColorStop(1, '#e9f6ff');
+    g.addColorStop(0, '#f3e6c6');
+    g.addColorStop(1, '#e7cf9e');
     ctx.fillStyle = g;
     ctx.fillRect(0,0,W,H);
 
-    ctx.fillStyle = 'rgba(255,255,255,0.75)';
-    drawCloud(90, 130, 1);
-    drawCloud(330, 90, 0.8);
-    drawCloud(230, 210, 0.6);
+    for(var i=0;i<clouds.length;i++){
+      var c = clouds[i];
+      var sp = screenPos(c.x, c.y);
+      if(sp.y < -80 || sp.y > H+80) continue;
+      drawCloud(sp.x, sp.y, c.scale);
+    }
   }
 
   function drawCloud(cx, cy, scale){
     ctx.save();
     ctx.translate(cx, cy);
     ctx.scale(scale, scale);
+    ctx.fillStyle = 'rgba(255,250,235,0.65)';
     ctx.beginPath();
     ctx.arc(0,0,26,0,Math.PI*2);
     ctx.arc(26,8,20,0,Math.PI*2);
@@ -324,140 +390,236 @@
     ctx.restore();
   }
 
-  function drawGround(){
-    ctx.fillStyle = '#c98a4b';
-    ctx.fillRect(0, H - groundH, W, groundH);
-    ctx.fillStyle = '#b5753a';
-    for(var x = -((Date.now()/8) % 40); x < W; x += 40){
-      ctx.fillRect(x, H - groundH, 20, 10);
-    }
-    ctx.fillStyle = '#8a5a2b';
-    ctx.fillRect(0, H - groundH, W, 6);
+  function drawMountains(){
+    var baseSp = screenPos(0, 40);
+    if(baseSp.y < -260 || baseSp.y > H+100) return;
+    ctx.fillStyle = '#cbb688';
+    ctx.beginPath();
+    ctx.moveTo(-20, baseSp.y);
+    ctx.lineTo(90, baseSp.y-160);
+    ctx.lineTo(190, baseSp.y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#d9c79b';
+    ctx.beginPath();
+    ctx.moveTo(150, baseSp.y);
+    ctx.lineTo(300, baseSp.y-220);
+    ctx.lineTo(430, baseSp.y);
+    ctx.closePath();
+    ctx.fill();
   }
 
-  function drawRing(ring){
-    var x = ring.x, y = ring.y;
+  function drawGround(){
+    var sp = screenPos(0, 40);
+    if(sp.y > H) {
+      ctx.fillStyle = '#8b5e3c';
+      ctx.fillRect(0, sp.y, W, Math.max(H, 40));
+      ctx.fillStyle = '#6b4226';
+      ctx.fillRect(0, sp.y, W, 8);
+    } else if(sp.y + 400 > 0){
+      ctx.fillStyle = '#8b5e3c';
+      ctx.fillRect(0, sp.y, W, 400);
+      ctx.fillStyle = '#6b4226';
+      ctx.fillRect(0, sp.y, W, 8);
+    }
+  }
 
-    // soft shadow glow behind the ring
+  function drawRingAt(sx, sy, alpha){
     ctx.save();
-    ctx.globalAlpha = 0.18;
-    ctx.fillStyle = '#000';
+    ctx.globalAlpha = alpha;
+
+    ctx.save();
+    ctx.globalAlpha = alpha * 0.35;
+    ctx.shadowColor = '#ff7a1f';
+    ctx.shadowBlur = 24;
+    ctx.strokeStyle = '#ff5a1f';
+    ctx.lineWidth = RIM_THICK + 6;
     ctx.beginPath();
-    ctx.ellipse(x, y + RING_OUTER + 6, RING_R * 0.7, 8, 0, 0, Math.PI*2);
-    ctx.fill();
+    ctx.arc(sx, sy, RING_R + RIM_THICK/2, 0, Math.PI*2);
+    ctx.stroke();
     ctx.restore();
 
-    // hanging net beneath the hole
-    ctx.strokeStyle = 'rgba(255,255,255,0.8)';
-    ctx.lineWidth = 1.4;
-    var netLen = 30;
-    for(var i = -3; i <= 3; i++){
-      ctx.beginPath();
-      ctx.moveTo(x + i * (RING_R/3.4), y + RING_R*0.55);
-      ctx.lineTo(x + i * (RING_R/5), y + RING_R*0.55 + netLen);
-      ctx.stroke();
-    }
-    ctx.beginPath();
-    ctx.moveTo(x - RING_R*0.7, y + RING_R*0.55 + netLen*0.55);
-    ctx.lineTo(x + RING_R*0.7, y + RING_R*0.55 + netLen*0.55);
-    ctx.stroke();
-
-    // outer rim ring (torus) — this is the solid part you must avoid
-    ctx.strokeStyle = '#e0581f';
+    var grad = ctx.createLinearGradient(sx, sy-RING_OUTER, sx, sy+RING_OUTER);
+    grad.addColorStop(0, '#ffcf5c');
+    grad.addColorStop(0.5, '#ff7a1f');
+    grad.addColorStop(1, '#e8360f');
+    ctx.strokeStyle = grad;
     ctx.lineWidth = RIM_THICK;
     ctx.beginPath();
-    ctx.arc(x, y, RING_R + RIM_THICK/2, 0, Math.PI*2);
+    ctx.arc(sx, sy, RING_R + RIM_THICK/2, 0, Math.PI*2);
     ctx.stroke();
 
-    // inner highlight line for a glossy hoop look
-    ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.6)';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(x, y, RING_R + 2, -Math.PI*0.85, -Math.PI*0.15);
+    ctx.arc(sx, sy, RING_R + 2, -Math.PI*0.85, -Math.PI*0.15);
     ctx.stroke();
 
-    // dark inner edge for depth
-    ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+    ctx.strokeStyle = 'rgba(70,20,0,0.35)';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(x, y, RING_R, 0, Math.PI*2);
+    ctx.arc(sx, sy, RING_R, 0, Math.PI*2);
     ctx.stroke();
+
+    ctx.restore();
+  }
+
+  function drawRings(){
+    if(prevRingGhost && prevRingGhost.alpha > 0){
+      var psp = screenPos(prevRingGhost.x, prevRingGhost.y);
+      drawRingAt(psp.x, psp.y, prevRingGhost.alpha);
+      prevRingGhost.alpha -= 0.06;
+      if(prevRingGhost.alpha <= 0) prevRingGhost = null;
+    }
+    var sp = screenPos(ring.x, ring.y);
+    if(sp.y > -120 && sp.y < H+120){
+      drawRingAt(sp.x, sp.y, 1);
+    }
+  }
+
+  function drawTrajectoryPreview(){
+    if(ballState !== 'ready' || !drag.active) return;
+    var vx = drag.vx, vy = drag.vy;
+    var px = ball.x, py = ball.y, pvx = vx, pvy = vy;
+    var t = 0, dt = 0.045;
+    ctx.fillStyle = 'rgba(255,255,255,0.75)';
+    for(var i=0;i<22;i++){
+      pvy += GRAVITY*dt;
+      px += pvx*dt;
+      py += pvy*dt;
+      var sp = screenPos(px, py);
+      var rr = Math.max(1.5, 4.5 - i*0.15);
+      ctx.beginPath();
+      ctx.arc(sp.x, sp.y, rr, 0, Math.PI*2);
+      ctx.fill();
+    }
+  }
+
+  function drawSlingshot(){
+    if(ballState !== 'ready' || !drag.active) return;
+    var bsp = screenPos(ball.x, ball.y);
+    ctx.strokeStyle = 'rgba(216,17,89,0.55)';
+    ctx.lineWidth = 4;
+    ctx.setLineDash([6,8]);
+    ctx.beginPath();
+    ctx.moveTo(bsp.x, bsp.y);
+    ctx.lineTo(bsp.x + (drag.cx-drag.sx), bsp.y + (drag.cy-drag.sy));
+    ctx.stroke();
+    ctx.setLineDash([]);
   }
 
   function drawBall(){
+    var sp = screenPos(ball.x, ball.y);
     ctx.save();
-    ctx.translate(ball.x, ball.y);
+    ctx.translate(sp.x, sp.y);
     ctx.rotate(ball.rot);
     var r = ball.r;
 
-    var g = ctx.createRadialGradient(-r*0.35, -r*0.35, r*0.2, 0, 0, r);
-    g.addColorStop(0, '#ffb066');
-    g.addColorStop(1, '#e0581f');
+    var g = ctx.createRadialGradient(-r*0.35,-r*0.35,r*0.2,0,0,r);
+    g.addColorStop(0, '#ff8fb8');
+    g.addColorStop(1, '#e0145f');
     ctx.fillStyle = g;
     ctx.beginPath();
     ctx.arc(0,0,r,0,Math.PI*2);
     ctx.fill();
 
-    ctx.strokeStyle = '#2a1608';
+    ctx.strokeStyle = '#6e0a30';
     ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(-r, 0); ctx.lineTo(r, 0);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(0, -r); ctx.lineTo(0, r);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(0, 0, r, -Math.PI*0.75, -Math.PI*0.25);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(0, 0, r, Math.PI*0.25, Math.PI*0.75);
-    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-r,0); ctx.lineTo(r,0); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0,-r); ctx.lineTo(0,r); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0,0,r,-Math.PI*0.75,-Math.PI*0.25); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0,0,r,Math.PI*0.25,Math.PI*0.75); ctx.stroke();
 
     ctx.restore();
   }
 
   function render(){
     drawBackground();
-    for(var i=0;i<rings.length;i++) drawRing(rings[i]);
+    drawMountains();
+    drawRings();
     drawGround();
+    drawTrajectoryPreview();
+    drawSlingshot();
     drawBall();
   }
 
+  var lastTime = null;
   function loop(ts){
-    if(state !== 'playing'){ render(); return; }
+    if(gameState !== 'playing'){ render(); return; }
     if(lastTime == null) lastTime = ts;
-    var dt = Math.min((ts - lastTime) / 1000, 1/30);
+    var dt = Math.min((ts-lastTime)/1000, 1/30);
     lastTime = ts;
     update(dt);
-    if(state === 'playing'){
-      render();
-      requestAnimationFrame(loop);
-    } else {
-      render();
+    checkApexMiss();
+    render();
+    requestAnimationFrame(loop);
+  }
+
+  function canvasPoint(clientX, clientY){
+    var rect = canvas.getBoundingClientRect();
+    return {
+      x: (clientX - rect.left) * (W/rect.width),
+      y: (clientY - rect.top) * (H/rect.height)
+    };
+  }
+
+  function updateDrag(cx, cy){
+    drag.cx = cx; drag.cy = cy;
+    var bsp = screenPos(ball.x, ball.y);
+    var dx = cx - bsp.x, dy = cy - bsp.y;
+    var len = Math.sqrt(dx*dx+dy*dy);
+    if(len > MAX_DRAG){ dx = dx/len*MAX_DRAG; dy = dy/len*MAX_DRAG; }
+    drag.vx = -dx * POWER_SCALE;
+    drag.vy = -dy * POWER_SCALE;
+    drag._len = Math.min(len, MAX_DRAG);
+  }
+
+  function onDown(clientX, clientY){
+    if(gameState !== 'playing' || ballState !== 'ready') return;
+    var p = canvasPoint(clientX, clientY);
+    drag.active = true;
+    drag.sx = p.x; drag.sy = p.y;
+    updateDrag(p.x, p.y);
+  }
+  function onMove(clientX, clientY){
+    if(!drag.active) return;
+    var p = canvasPoint(clientX, clientY);
+    updateDrag(p.x, p.y);
+  }
+  function onUp(){
+    if(!drag.active) return;
+    drag.active = false;
+    if(drag._len >= MIN_DRAG){
+      shoot(drag.vx, drag.vy);
     }
   }
 
-  // input
-  function onPress(e){
-    if(e) e.preventDefault();
-    jump();
-  }
-  canvas.addEventListener('pointerdown', onPress);
+  canvas.addEventListener('pointerdown', function(e){ e.preventDefault(); onDown(e.clientX, e.clientY); });
+  canvas.addEventListener('pointermove', function(e){ e.preventDefault(); onMove(e.clientX, e.clientY); });
+  window.addEventListener('pointerup', function(e){ onUp(); });
+
   startBtn.addEventListener('pointerdown', function(e){
     e.stopPropagation();
     e.preventDefault();
     startGame();
   });
-  window.addEventListener('keydown', function(e){
-    if(e.code === 'Space' || e.code === 'ArrowUp'){
-      e.preventDefault();
-      jump();
-    }
-  });
 
-  // initial draw
-  resetGame();
+  resetWorld();
   render();
+
+  // debug hook for automated testing
+  window.__dbg = function(){
+    return {
+      gameState: gameState, ballState: ballState,
+      ball: { x: ball.x, y: ball.y, vx: ball.vx, vy: ball.vy },
+      ring: { x: ring.x, y: ring.y, resolved: ring.resolved },
+      camY: camera.y, score: score, multiplier: multiplier, best: best
+    };
+  };
+  window.__debugShoot = function(vx, vy){
+    if(ballState === 'ready') shoot(vx, vy);
+  };
+  window.__debugStart = function(){ startGame(); };
 })();
 </script>
 </body>

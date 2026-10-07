@@ -11,7 +11,7 @@
   *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   html,body{
     margin:0; padding:0; height:100%; overflow:hidden;
-    background:#2b1a10;
+    background:#1c2a3a;
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
     color:var(--ink);
     display:flex; align-items:center; justify-content:center;
@@ -36,12 +36,12 @@
     pointer-events:none;
   }
   .badge{
-    background:rgba(90,52,32,0.92);
-    border:2px solid rgba(255,255,255,0.12);
+    background:rgba(60,38,20,0.85);
+    border:2px solid rgba(255,255,255,0.18);
     border-radius:14px;
     padding:6px 16px;
     text-align:center;
-    color:#f6e8ce;
+    color:#fff0da;
     box-shadow:0 4px 10px rgba(0,0,0,0.25);
   }
   .badge .label{
@@ -67,9 +67,9 @@
     position:absolute; inset:0;
     display:flex; flex-direction:column; align-items:center; justify-content:center;
     text-align:center;
-    background:rgba(40,22,12,0.68);
+    background:rgba(10,24,40,0.68);
     backdrop-filter:blur(2px);
-    color:#fbeedb;
+    color:#fff6e6;
     padding:24px;
   }
   #overlay.hidden{ display:none; }
@@ -99,16 +99,26 @@
     font-size:1.6rem; font-weight:800;
   }
   #startBtn{
-    background:linear-gradient(160deg,#ff5f96,#d81159);
+    background:linear-gradient(160deg,#4fd48c,#1f9e6a);
     border:none; color:#fff; font-weight:800; font-size:1.05rem;
     padding:14px 34px; border-radius:999px;
-    box-shadow:0 8px 20px rgba(216,17,89,0.45);
+    box-shadow:0 8px 20px rgba(31,158,106,0.45);
     cursor:pointer;
   }
   #startBtn:active{ transform:scale(0.97); }
+  #splashText{
+    position:absolute; top:38%; left:50%; transform:translate(-50%,-50%);
+    text-align:center;
+    color:#fff6e6;
+    text-shadow:0 4px 14px rgba(0,0,0,0.4);
+    pointer-events:none;
+    opacity:0;
+  }
+  #splashText .big{ font-size:2.1rem; font-weight:800; }
+  #splashText .mult{ font-size:1.6rem; font-weight:800; color:#ffd36b; }
   #footer-hint{
     position:absolute; bottom:10px; left:0; right:0;
-    text-align:center; font-size:0.72rem; color:rgba(251,238,219,0.55);
+    text-align:center; font-size:0.72rem; color:rgba(255,246,230,0.55);
   }
 </style>
 </head>
@@ -126,11 +136,15 @@
     </div>
   </div>
   <div id="multBadge">x1</div>
+  <div id="splashText">
+    <div class="big">SPLASH</div>
+    <div class="mult" id="splashMult">x1</div>
+  </div>
   <div id="overlay">
     <h1>🏀 Potaya Smaç</h1>
-    <p>Topu geri çekip bırak: tuttuğun yönün tersine fırlar ve bir yay çizerek
-    bir sonraki çembere uçar. Çembere değmeden tam ortadan geçersen çarpanın
-    artar. Bir çemberi kaçırırsan oyun biter.</p>
+    <p>Dokun dokun zıpla: top yerçekimiyle sürekli düşer, her dokunuşunda
+    yukarı sıçrar. Önünden gelen çemberlerin ortasından, değmeden geçersen
+    çarpanın artar. Çemberi ıskalarsan ya da suya düşersen oyun biter.</p>
     <div class="score-row">
       <div class="score-box">
         <div class="label">Skor</div>
@@ -157,6 +171,8 @@
   var startBtn = document.getElementById('startBtn');
   var lastScoreEl = document.getElementById('lastScore');
   var bestScoreEl = document.getElementById('bestScore');
+  var splashText = document.getElementById('splashText');
+  var splashMultEl = document.getElementById('splashMult');
 
   var W = 480, H = 800;
   canvas.width = W;
@@ -168,32 +184,38 @@
   bestEl.textContent = best;
   bestScoreEl.textContent = best;
 
-  var gameState = 'start'; // start | playing | over
-  var ballState = 'ready'; // ready | aiming | flying | falling
+  var gameState = 'start'; // start | playing | splashing | over
   var score = 0;
   var multiplier = 1;
 
-  var GRAVITY = 1700;
-  var MAX_DRAG = 150;
-  var POWER_SCALE = 6.5;
-  var MIN_DRAG = 14;
+  var GRAVITY = 1550;
+  var FLAP_VY = -430;
+  var FORWARD_SPEED = 150;
+  var WATER_LEVEL = H - 90;
 
-  var ball = { x: 0, y: 0, vx: 0, vy: 0, r: 18, rot: 0 };
-  var camera = { y: 0 };
+  var ball = { x: 0, y: 0, vy: 0, r: 19, rot: 0 };
+  var camera = { x: 0 };
 
-  var RING_R = 52;
-  var RIM_THICK = 13;
+  // ring is drawn as a flattened (horizontal) ellipse, like a hoop seen
+  // front-on but lying toward the camera -- RING_RX is the visual half-width,
+  // RING_R is the vertical half-height and is what gameplay/collision uses.
+  var RING_RX = 76;
+  var RING_R = 34;
+  var RIM_THICK = 12;
   var RING_OUTER = RING_R + RIM_THICK;
-  var ring = { x: 0, y: 0, resolved: false };
-  var prevRingGhost = null; // for brief fade-out visual
+  var ring = { x: 0, y: 0, resolved: false, passed: false };
+  var prevRingGhost = null;
 
+  var waves = [];
+  var dunes = [];
   var clouds = [];
-  var highestSpawnY = 0; // most negative world y reached by spawned decor
+  var furthestSpawnX = 0;
 
-  var drag = { active:false, sx:0, sy:0, cx:0, cy:0, vx:0, vy:0 };
-  var fallTimer = 0;
+  var splashTimer = 0;
+  var fallVy = 0;
 
   function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+  function rand(a,b){ return a + Math.random()*(b-a); }
 
   function resetWorld(){
     score = 0;
@@ -201,41 +223,41 @@
     scoreEl.textContent = '0';
     multBadge.textContent = 'x1';
     multBadge.classList.remove('show','bump');
+    splashText.style.opacity = 0;
 
-    ball.x = W * 0.5;
-    ball.y = 0;
-    ball.vx = 0; ball.vy = 0; ball.rot = 0;
-    camera.y = ball.y - H * 0.72;
-    ballState = 'ready';
+    ball.x = 0;
+    ball.y = H * 0.45;
+    ball.vy = 0;
+    ball.rot = 0;
+    camera.x = ball.x - W * 0.3;
 
-    ring.x = W * 0.5 + (Math.random()*160-80);
-    ring.x = clamp(ring.x, 70, W-70);
-    ring.y = ball.y - (220 + Math.random()*70);
+    ring.x = ball.x + 360;
+    ring.y = rand(H*0.28, H*0.62);
     ring.resolved = false;
+    ring.passed = false;
     prevRingGhost = null;
 
+    waves = [];
+    dunes = [];
     clouds = [];
-    highestSpawnY = ball.y + 40;
-    for(var i=0;i<5;i++) spawnCloud();
+    furthestSpawnX = ball.x - 100;
+    for(var i=0;i<10;i++) spawnDecor();
   }
 
-  function spawnCloud(){
-    highestSpawnY -= (120 + Math.random()*90);
-    clouds.push({
-      x: 40 + Math.random()*(W-80),
-      y: highestSpawnY,
-      scale: 0.6 + Math.random()*0.8,
-      speed: 0.35 + Math.random()*0.25
-    });
+  function spawnDecor(){
+    furthestSpawnX += rand(70,120);
+    clouds.push({ x: furthestSpawnX + rand(0,200), y: rand(60,220), scale: rand(0.6,1.2), speed: rand(0.2,0.4) });
+    if(Math.random() < 0.5){
+      dunes.push({ x: furthestSpawnX, h: rand(70,150) });
+    }
   }
 
   function spawnNextRing(){
     prevRingGhost = { x: ring.x, y: ring.y, alpha: 1 };
-    var dx = (Math.random()*230 - 115);
-    var nx = clamp(ring.x + dx, 70, W-70);
-    var ny = ring.y - (190 + Math.random()*90);
-    ring.x = nx; ring.y = ny; ring.resolved = false;
-    while(highestSpawnY > ny - 300){ spawnCloud(); }
+    var nx = ring.x + rand(300, 420);
+    var ny = clamp(ring.y + rand(-140,140), H*0.2, H*0.68);
+    ring.x = nx; ring.y = ny; ring.resolved = false; ring.passed = false;
+    while(furthestSpawnX < nx + 300){ spawnDecor(); }
   }
 
   function startGame(){
@@ -253,6 +275,19 @@
     multBadge.classList.add('bump');
   }
 
+  function flap(){
+    if(gameState !== 'playing') return;
+    ball.vy = FLAP_VY;
+  }
+
+  function doSplash(finalMult){
+    gameState = 'splashing';
+    splashTimer = 0;
+    fallVy = ball.vy;
+    splashMultEl.textContent = 'x' + finalMult;
+    splashText.style.opacity = 1;
+  }
+
   function endGame(){
     gameState = 'over';
     lastScoreEl.textContent = score;
@@ -262,23 +297,18 @@
       bestScoreEl.textContent = best;
       try { localStorage.setItem(BEST_KEY, String(best)); } catch(e){}
     }
-    document.querySelector('#overlay h1').textContent = '🏀 Oyun Bitti';
-    document.querySelector('#overlay p').textContent = 'Çemberi kaçırdın! Tekrar dene ve çarpanını büyüt.';
+    document.querySelector('#overlay h1').textContent = '🌊 Suya Düştün!';
+    document.querySelector('#overlay p').textContent = 'Çemberi kaçırdın. Tekrar dene ve çarpanını büyüt.';
     startBtn.textContent = 'Tekrar Oyna';
     overlay.classList.remove('hidden');
   }
 
   function screenPos(worldX, worldY){
-    return { x: worldX, y: worldY - camera.y };
+    return { x: worldX - camera.x, y: worldY };
   }
 
-  function shoot(vx, vy){
-    ball.vx = vx; ball.vy = vy;
-    ballState = 'flying';
-  }
-
-  function resolveRing(dist){
-    if(dist <= RING_R - ball.r){
+  function resolveRing(dy){
+    if(dy <= RING_R - ball.r){
       score += multiplier;
       multiplier += 1;
       scoreEl.textContent = score;
@@ -291,87 +321,66 @@
       multBadge.textContent = 'x1';
       multBadge.classList.remove('show');
     }
-    ball.x = ring.x; ball.y = ring.y;
-    ball.vx = 0; ball.vy = 0; ball.rot = 0;
-    ballState = 'ready';
+    ring.passed = true;
     spawnNextRing();
   }
 
   function update(dt){
-    for(var i=0;i<clouds.length;i++) clouds[i].x += clouds[i].speed * dt * 6;
-    while(clouds.length && clouds[0].y > ball.y + H*1.3){ clouds.shift(); }
+    ball.x += FORWARD_SPEED * dt;
+    ball.vy += GRAVITY * dt;
+    ball.y += ball.vy * dt;
+    ball.rot += dt * 5.5;
 
-    var targetCamY = ball.y - H * 0.72;
-    camera.y += (targetCamY - camera.y) * Math.min(1, dt*4.2);
+    var targetCamX = ball.x - W * 0.3;
+    camera.x += (targetCamX - camera.x) * Math.min(1, dt*6);
 
-    if(ballState === 'flying'){
-      ball.vy += GRAVITY * dt;
-      ball.x += ball.vx * dt;
-      ball.y += ball.vy * dt;
-      ball.rot += ball.vx * dt * 0.01;
+    for(var i=0;i<clouds.length;i++) clouds[i].x += 0;
+    while(clouds.length && clouds[0].x < camera.x - 150) clouds.shift();
+    while(dunes.length && dunes[0].x < camera.x - 150) dunes.shift();
 
-      if(ball.x - ball.r < 10){ ball.x = ball.r + 10; ball.vx *= -0.55; }
-      if(ball.x + ball.r > W-10){ ball.x = W-10-ball.r; ball.vx *= -0.55; }
-
-      if(!ring.resolved && ball.y <= ring.y){
+    if(gameState === 'playing'){
+      if(!ring.resolved && ball.x >= ring.x - ball.r){
         ring.resolved = true;
-        var dx = ring.x - ball.x;
-        var dy = ring.y - ball.y;
-        var dist = Math.sqrt(dx*dx+dy*dy);
-        if(dist < RING_OUTER + ball.r){
-          resolveRing(dist);
+        var dy = Math.abs(ball.y - ring.y);
+        if(dy < RING_OUTER + ball.r){
+          resolveRing(dy);
         } else {
-          ballState = 'falling';
-          fallTimer = 0;
+          doSplash(multiplier);
         }
       }
+      if(ball.y - ball.r > WATER_LEVEL){
+        doSplash(multiplier);
+      }
+      if(ball.y < -40){ ball.y = -40; ball.vy = 0; }
     }
 
-    if(ballState === 'falling'){
-      ball.vy += GRAVITY * dt;
-      ball.x += ball.vx * dt;
-      ball.y += ball.vy * dt;
-      ball.rot += ball.vx * dt * 0.01;
-      fallTimer += dt;
-      if(fallTimer > 1.1 || ball.y - camera.y > H + 140){
+    if(gameState === 'splashing'){
+      fallVy += GRAVITY * dt;
+      ball.vy = fallVy;
+      ball.y += fallVy * dt;
+      ball.rot += dt * 9;
+      splashTimer += dt;
+      if(splashTimer > 0.9){
         endGame();
       }
     }
   }
 
-  // Track apex-missed condition separately (cleaner than inline above)
-  var launchY = 0;
-  var pastApex = false;
-  var origShoot = shoot;
-  shoot = function(vx, vy){
-    origShoot(vx, vy);
-    launchY = ball.y;
-    pastApex = false;
-  };
-
-  function checkApexMiss(){
-    if(ballState !== 'flying' || ring.resolved) return;
-    if(ball.vy >= 0){
-      if(!pastApex) pastApex = true;
-      if(ball.y >= launchY){
-        ring.resolved = true;
-        ballState = 'falling';
-        fallTimer = 0;
-      }
-    }
-  }
-
-  function drawBackground(){
+  function drawSky(){
     var g = ctx.createLinearGradient(0,0,0,H);
-    g.addColorStop(0, '#f3e6c6');
-    g.addColorStop(1, '#e7cf9e');
+    g.addColorStop(0, '#2b3f63');
+    g.addColorStop(0.35, '#e8795f');
+    g.addColorStop(0.62, '#f5b98a');
+    g.addColorStop(1, '#f7dca8');
     ctx.fillStyle = g;
     ctx.fillRect(0,0,W,H);
+  }
 
+  function drawClouds(){
     for(var i=0;i<clouds.length;i++){
       var c = clouds[i];
       var sp = screenPos(c.x, c.y);
-      if(sp.y < -80 || sp.y > H+80) continue;
+      if(sp.x < -80 || sp.x > W+80) continue;
       drawCloud(sp.x, sp.y, c.scale);
     }
   }
@@ -380,85 +389,98 @@
     ctx.save();
     ctx.translate(cx, cy);
     ctx.scale(scale, scale);
-    ctx.fillStyle = 'rgba(255,250,235,0.65)';
+    ctx.fillStyle = 'rgba(255,250,240,0.75)';
     ctx.beginPath();
-    ctx.arc(0,0,26,0,Math.PI*2);
-    ctx.arc(26,8,20,0,Math.PI*2);
-    ctx.arc(-26,8,20,0,Math.PI*2);
-    ctx.arc(0,16,24,0,Math.PI*2);
+    ctx.arc(0,0,24,0,Math.PI*2);
+    ctx.arc(24,7,18,0,Math.PI*2);
+    ctx.arc(-24,7,18,0,Math.PI*2);
+    ctx.arc(0,14,22,0,Math.PI*2);
     ctx.fill();
     ctx.restore();
   }
 
-  function drawMountains(){
-    var baseSp = screenPos(0, 40);
-    if(baseSp.y < -260 || baseSp.y > H+100) return;
-    ctx.fillStyle = '#cbb688';
-    ctx.beginPath();
-    ctx.moveTo(-20, baseSp.y);
-    ctx.lineTo(90, baseSp.y-160);
-    ctx.lineTo(190, baseSp.y);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = '#d9c79b';
-    ctx.beginPath();
-    ctx.moveTo(150, baseSp.y);
-    ctx.lineTo(300, baseSp.y-220);
-    ctx.lineTo(430, baseSp.y);
-    ctx.closePath();
-    ctx.fill();
+  function drawDunes(){
+    for(var i=0;i<dunes.length;i++){
+      var d = dunes[i];
+      var sp = screenPos(d.x, WATER_LEVEL);
+      if(sp.x < -200 || sp.x > W+200) continue;
+      ctx.fillStyle = 'rgba(190,140,120,0.35)';
+      ctx.beginPath();
+      ctx.moveTo(sp.x-90, sp.y);
+      ctx.lineTo(sp.x, sp.y - d.h);
+      ctx.lineTo(sp.x+90, sp.y);
+      ctx.closePath();
+      ctx.fill();
+    }
   }
 
-  function drawGround(){
-    var sp = screenPos(0, 40);
-    if(sp.y > H) {
-      ctx.fillStyle = '#8b5e3c';
-      ctx.fillRect(0, sp.y, W, Math.max(H, 40));
-      ctx.fillStyle = '#6b4226';
-      ctx.fillRect(0, sp.y, W, 8);
-    } else if(sp.y + 400 > 0){
-      ctx.fillStyle = '#8b5e3c';
-      ctx.fillRect(0, sp.y, W, 400);
-      ctx.fillStyle = '#6b4226';
-      ctx.fillRect(0, sp.y, W, 8);
+  function drawWater(){
+    var sp = screenPos(0, WATER_LEVEL);
+    var g = ctx.createLinearGradient(0, WATER_LEVEL, 0, H);
+    g.addColorStop(0, '#2f6f8f');
+    g.addColorStop(1, '#17415c');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, WATER_LEVEL, W, H - WATER_LEVEL);
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+    ctx.lineWidth = 2;
+    var waveOffset = (camera.x * 0.6) % 40;
+    for(var y = WATER_LEVEL + 14; y < H; y += 22){
+      ctx.beginPath();
+      for(var x = -waveOffset; x < W+40; x += 40){
+        ctx.moveTo(x, y);
+        ctx.quadraticCurveTo(x+10, y-8, x+20, y);
+        ctx.quadraticCurveTo(x+30, y+8, x+40, y);
+      }
+      ctx.stroke();
     }
   }
 
   function drawRingAt(sx, sy, alpha){
     ctx.save();
     ctx.globalAlpha = alpha;
+    var rx = RING_RX + RIM_THICK/2;
+    var ry = RING_R + RIM_THICK/2;
 
     ctx.save();
     ctx.globalAlpha = alpha * 0.35;
-    ctx.shadowColor = '#ff7a1f';
-    ctx.shadowBlur = 24;
-    ctx.strokeStyle = '#ff5a1f';
+    ctx.shadowColor = '#ff7a4a';
+    ctx.shadowBlur = 22;
+    ctx.strokeStyle = '#ff6a3a';
     ctx.lineWidth = RIM_THICK + 6;
     ctx.beginPath();
-    ctx.arc(sx, sy, RING_R + RIM_THICK/2, 0, Math.PI*2);
+    ctx.ellipse(sx, sy, rx, ry, 0, 0, Math.PI*2);
     ctx.stroke();
     ctx.restore();
 
-    var grad = ctx.createLinearGradient(sx, sy-RING_OUTER, sx, sy+RING_OUTER);
-    grad.addColorStop(0, '#ffcf5c');
-    grad.addColorStop(0.5, '#ff7a1f');
-    grad.addColorStop(1, '#e8360f');
+    var grad = ctx.createLinearGradient(sx, sy-ry, sx, sy+ry);
+    grad.addColorStop(0, '#ffb07a');
+    grad.addColorStop(0.5, '#ff7a4a');
+    grad.addColorStop(1, '#e8502a');
     ctx.strokeStyle = grad;
     ctx.lineWidth = RIM_THICK;
     ctx.beginPath();
-    ctx.arc(sx, sy, RING_R + RIM_THICK/2, 0, Math.PI*2);
+    ctx.ellipse(sx, sy, rx, ry, 0, 0, Math.PI*2);
     ctx.stroke();
 
-    ctx.strokeStyle = 'rgba(255,255,255,0.6)';
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+    ctx.lineWidth = 2.5;
     ctx.beginPath();
-    ctx.arc(sx, sy, RING_R + 2, -Math.PI*0.85, -Math.PI*0.15);
+    ctx.ellipse(sx, sy, RING_RX + 2, RING_R + 2, 0, -Math.PI*0.85, -Math.PI*0.15);
     ctx.stroke();
 
-    ctx.strokeStyle = 'rgba(70,20,0,0.35)';
+    ctx.strokeStyle = 'rgba(70,20,0,0.3)';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(sx, sy, RING_R, 0, Math.PI*2);
+    ctx.ellipse(sx, sy, RING_RX, RING_R, 0, 0, Math.PI*2);
+    ctx.stroke();
+
+    // open-ring cue: a soft inner shadow so the hoop reads as a flattened
+    // ring you fly through, not a flat disc
+    ctx.strokeStyle = 'rgba(70,20,0,0.18)';
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.ellipse(sx, sy, RING_RX - RIM_THICK*0.6, RING_R - RIM_THICK*0.6, 0, 0.15*Math.PI, 0.85*Math.PI);
     ctx.stroke();
 
     ctx.restore();
@@ -468,135 +490,96 @@
     if(prevRingGhost && prevRingGhost.alpha > 0){
       var psp = screenPos(prevRingGhost.x, prevRingGhost.y);
       drawRingAt(psp.x, psp.y, prevRingGhost.alpha);
-      prevRingGhost.alpha -= 0.06;
+      prevRingGhost.alpha -= 0.07;
       if(prevRingGhost.alpha <= 0) prevRingGhost = null;
     }
     var sp = screenPos(ring.x, ring.y);
-    if(sp.y > -120 && sp.y < H+120){
+    if(sp.x > -140 && sp.x < W+140){
       drawRingAt(sp.x, sp.y, 1);
     }
-  }
-
-  function drawTrajectoryPreview(){
-    if(ballState !== 'ready' || !drag.active) return;
-    var vx = drag.vx, vy = drag.vy;
-    var px = ball.x, py = ball.y, pvx = vx, pvy = vy;
-    var t = 0, dt = 0.045;
-    ctx.fillStyle = 'rgba(255,255,255,0.75)';
-    for(var i=0;i<22;i++){
-      pvy += GRAVITY*dt;
-      px += pvx*dt;
-      py += pvy*dt;
-      var sp = screenPos(px, py);
-      var rr = Math.max(1.5, 4.5 - i*0.15);
-      ctx.beginPath();
-      ctx.arc(sp.x, sp.y, rr, 0, Math.PI*2);
-      ctx.fill();
-    }
-  }
-
-  function drawSlingshot(){
-    if(ballState !== 'ready' || !drag.active) return;
-    var bsp = screenPos(ball.x, ball.y);
-    ctx.strokeStyle = 'rgba(216,17,89,0.55)';
-    ctx.lineWidth = 4;
-    ctx.setLineDash([6,8]);
-    ctx.beginPath();
-    ctx.moveTo(bsp.x, bsp.y);
-    ctx.lineTo(bsp.x + (drag.cx-drag.sx), bsp.y + (drag.cy-drag.sy));
-    ctx.stroke();
-    ctx.setLineDash([]);
   }
 
   function drawBall(){
     var sp = screenPos(ball.x, ball.y);
     ctx.save();
+
+    // soft contact shadow on the ground plane below the ball, so it reads
+    // as a solid round object rather than a flat sticker
+    ctx.save();
+    ctx.globalAlpha = 0.18;
+    ctx.fillStyle = '#20140a';
+    ctx.beginPath();
+    ctx.ellipse(sp.x, sp.y + ball.r*0.55, ball.r*0.9, ball.r*0.32, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+
     ctx.translate(sp.x, sp.y);
     ctx.rotate(ball.rot);
     var r = ball.r;
 
+    // dark outline first so the ball has a crisp silhouette against the sky
+    ctx.fillStyle = '#7a3406';
+    ctx.beginPath();
+    ctx.arc(0,0,r+1.5,0,Math.PI*2);
+    ctx.fill();
+
     var g = ctx.createRadialGradient(-r*0.35,-r*0.35,r*0.2,0,0,r);
-    g.addColorStop(0, '#ff8fb8');
-    g.addColorStop(1, '#e0145f');
+    g.addColorStop(0, '#ffc47a');
+    g.addColorStop(0.55, '#ff9a3c');
+    g.addColorStop(1, '#d9600f');
     ctx.fillStyle = g;
     ctx.beginPath();
     ctx.arc(0,0,r,0,Math.PI*2);
     ctx.fill();
 
-    ctx.strokeStyle = '#6e0a30';
-    ctx.lineWidth = 2;
+    // curved basketball seams -- these rotate with the ball so the spin
+    // (not just the position) is clearly visible every frame
+    ctx.strokeStyle = 'rgba(122,52,6,0.9)';
+    ctx.lineWidth = Math.max(1.5, r*0.1);
     ctx.beginPath(); ctx.moveTo(-r,0); ctx.lineTo(r,0); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(0,-r); ctx.lineTo(0,r); ctx.stroke();
-    ctx.beginPath(); ctx.arc(0,0,r,-Math.PI*0.75,-Math.PI*0.25); ctx.stroke();
-    ctx.beginPath(); ctx.arc(0,0,r,Math.PI*0.25,Math.PI*0.75); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0,-r);
+    ctx.quadraticCurveTo(r*0.55,0,0,r);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0,-r);
+    ctx.quadraticCurveTo(-r*0.55,0,0,r);
+    ctx.stroke();
+
+    // small specular highlight for a round, glossy read
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.beginPath();
+    ctx.ellipse(-r*0.32,-r*0.34,r*0.26,r*0.16,-0.5,0,Math.PI*2);
+    ctx.fill();
 
     ctx.restore();
   }
 
   function render(){
-    drawBackground();
-    drawMountains();
+    drawSky();
+    drawClouds();
+    drawDunes();
     drawRings();
-    drawGround();
-    drawTrajectoryPreview();
-    drawSlingshot();
+    drawWater();
     drawBall();
   }
 
   var lastTime = null;
   function loop(ts){
-    if(gameState !== 'playing'){ render(); return; }
+    if(gameState !== 'playing' && gameState !== 'splashing'){ render(); return; }
     if(lastTime == null) lastTime = ts;
     var dt = Math.min((ts-lastTime)/1000, 1/30);
     lastTime = ts;
     update(dt);
-    checkApexMiss();
     render();
     requestAnimationFrame(loop);
   }
 
-  function canvasPoint(clientX, clientY){
-    var rect = canvas.getBoundingClientRect();
-    return {
-      x: (clientX - rect.left) * (W/rect.width),
-      y: (clientY - rect.top) * (H/rect.height)
-    };
+  function onTap(){
+    if(gameState === 'playing') flap();
   }
 
-  function updateDrag(cx, cy){
-    drag.cx = cx; drag.cy = cy;
-    var bsp = screenPos(ball.x, ball.y);
-    var dx = cx - bsp.x, dy = cy - bsp.y;
-    var len = Math.sqrt(dx*dx+dy*dy);
-    if(len > MAX_DRAG){ dx = dx/len*MAX_DRAG; dy = dy/len*MAX_DRAG; }
-    drag.vx = -dx * POWER_SCALE;
-    drag.vy = -dy * POWER_SCALE;
-    drag._len = Math.min(len, MAX_DRAG);
-  }
-
-  function onDown(clientX, clientY){
-    if(gameState !== 'playing' || ballState !== 'ready') return;
-    var p = canvasPoint(clientX, clientY);
-    drag.active = true;
-    drag.sx = p.x; drag.sy = p.y;
-    updateDrag(p.x, p.y);
-  }
-  function onMove(clientX, clientY){
-    if(!drag.active) return;
-    var p = canvasPoint(clientX, clientY);
-    updateDrag(p.x, p.y);
-  }
-  function onUp(){
-    if(!drag.active) return;
-    drag.active = false;
-    if(drag._len >= MIN_DRAG){
-      shoot(drag.vx, drag.vy);
-    }
-  }
-
-  canvas.addEventListener('pointerdown', function(e){ e.preventDefault(); onDown(e.clientX, e.clientY); });
-  canvas.addEventListener('pointermove', function(e){ e.preventDefault(); onMove(e.clientX, e.clientY); });
-  window.addEventListener('pointerup', function(e){ onUp(); });
+  canvas.addEventListener('pointerdown', function(e){ e.preventDefault(); onTap(); });
 
   startBtn.addEventListener('pointerdown', function(e){
     e.stopPropagation();
@@ -610,16 +593,15 @@
   // debug hook for automated testing
   window.__dbg = function(){
     return {
-      gameState: gameState, ballState: ballState,
-      ball: { x: ball.x, y: ball.y, vx: ball.vx, vy: ball.vy },
+      gameState: gameState,
+      ball: { x: ball.x, y: ball.y, vy: ball.vy },
       ring: { x: ring.x, y: ring.y, resolved: ring.resolved },
-      camY: camera.y, score: score, multiplier: multiplier, best: best
+      camX: camera.x, score: score, multiplier: multiplier, best: best
     };
   };
-  window.__debugShoot = function(vx, vy){
-    if(ballState === 'ready') shoot(vx, vy);
-  };
+  window.__debugFlap = function(){ flap(); };
   window.__debugStart = function(){ startGame(); };
+  window.__debugSetRing = function(x,y){ ring.x = x; ring.y = y; ring.resolved = false; };
 })();
 </script>
 </body>
